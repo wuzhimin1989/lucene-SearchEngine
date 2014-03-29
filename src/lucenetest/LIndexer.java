@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 
+import org.apache.lucene.analysis.core.SimpleAnalyzer;
 import org.apache.lucene.analysis.core.StopAnalyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
@@ -18,8 +19,10 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.queryparser.*;
+import org.apache.lucene.queryparser.classic.MultiFieldQueryParser;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
@@ -29,9 +32,18 @@ import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.Version;
+import org.json.JSONException;
+import org.json.JSONObject;
 
-public class SearchEngine {
-	public TFIDFScoring tfidfs;
+import preprocessinganalyser.NGramAnalyzer;
+import customSimilarity.MyTFIDFSimilarity;
+
+public class LIndexer {
+	//public TFIDFScoring tfidfs;	
+	//public MyTFIDFSimilarity MySimilarity; optional
+	
+	public LIndexer(){}
+	
 	public void Luceneindexer()
 	{
 		Directory directory = null;
@@ -51,14 +63,21 @@ public class SearchEngine {
 		ftype.setStored(true);
 		
 		try{
-			directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\index"));
-			directory2 = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\index1"));
+			directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\SWindex"));
+			directory2 = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\BiWindex"));
 			
 			iwc = new IndexWriterConfig(Version.LUCENE_47, new StopAnalyzer(Version.LUCENE_47));
 			iwc2 = new IndexWriterConfig(Version.LUCENE_47, new NGramAnalyzer(2, 2));
 			
+			/*MySimilarity = new MyTFIDFSimilarity();
+			iwc.setSimilarity(MySimilarity);
+			iwc2.setSimilarity(MySimilarity);*/
+			
 			iw = new IndexWriter(directory, iwc);
 			iw2 = new IndexWriter(directory2, iwc2);
+			
+			
+			
 		
 			Document doc = null;
 			File f = new File("I:\\zhimin\\courses\\ir\\resultdoc\\lucenetxt");
@@ -66,37 +85,55 @@ public class SearchEngine {
 			for(File file : f.listFiles())
 			{
 				FileReader r = new FileReader(file);
-				BufferedReader bf = new BufferedReader(new FileReader(file));
+				BufferedReader bf = new BufferedReader(r);
 				  
-				String tmpc = "";
-				StringBuilder sb = new StringBuilder();
+				String tmpline = "";
+				//StringBuilder sb = new StringBuilder();
 				  
-				while(tmpc != null)
+				while(tmpline != null)
 				{
-					tmpc = bf.readLine();
+					tmpline = bf.readLine();
 				   
-					if(tmpc == null){
+					if(tmpline == null){
 						break;
 					}
 				   
-					sb.append(tmpc.trim());
-				}
-				  
-				bf.close();
-				
-				System.out.println(sb.toString());
-				
-				doc = new Document();
+					//sb.append(tmpline.trim()); 
+					//bf.close();			
+					//System.out.println(sb.toString());
+					try{
+						JSONObject jsonobj = new JSONObject(tmpline);
+						String Svotes = jsonobj.getString("votes"); 
+						String Suid = jsonobj.getString("user_id");
+						String Srevid = jsonobj.getString("review_id");
+						String Sstars = jsonobj.getString("stars");
+						String Sdate = jsonobj.getString("date");
+						String Stext = jsonobj.getString("text");
+					
+						doc = new Document();
 								
-				Field content = new Field("content", sb.toString(), ftype);
-                Field filename = new Field("filename", file.getName(), ftype);
-                Field path = new Field("path", file.getAbsolutePath(), ftype);
-                doc.add(content);
-                doc.add(filename);
-                doc.add(path);
-                
-                iw.addDocument(doc);
-                iw2.addDocument(doc);
+						Field votes = new Field("votes", Svotes, ftype);
+						Field userid = new Field("user_id", Suid, ftype);
+						Field reviewid = new Field("review_id", Srevid, ftype);
+						Field stars =  new Field("stars", Sstars, ftype);
+						Field dates = new Field("date", Sdate, ftype);
+						Field content = new Field("text", Stext, ftype);
+						
+						doc.add(votes);
+						doc.add(userid);
+						doc.add(reviewid);
+						doc.add(stars);
+						doc.add(dates);
+						doc.add(content);
+			
+					}catch(JSONException e){
+						e.printStackTrace();
+					}finally{
+						iw.addDocument(doc);
+						iw2.addDocument(doc);
+					}
+				}
+				bf.close();
 			}
 		}catch (CorruptIndexException e) {
 	            // TODO Auto-generated catch block
@@ -123,53 +160,4 @@ public class SearchEngine {
 	        }
 	}
 	
-	public void Lucenesearcher()
-	{
-		try{
-			Directory directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\index"));
-			IndexReader ir = DirectoryReader.open(directory);
-			IndexSearcher isearch = new IndexSearcher(ir);
-			QueryParser parser=new QueryParser(Version.LUCENE_47, "content",new StandardAnalyzer(Version.LUCENE_47));
-			
-			Query query=parser.parse("buy KFC");
-			
-			TopDocs top=isearch.search(query, 1);
-			ScoreDoc[] sdoc=top.scoreDocs;
-			System.out.println("num of docs:"+sdoc.length);
-			
-			int thit = top.totalHits;
-			for(ScoreDoc sd:sdoc)
-			{
-				Document doc = isearch.doc(sd.doc);
-				
-				String[] scoreExplain = null;  
-		           // scoreExplain可以显示文档的得分详情，这里用split截取总分  
-		        scoreExplain = isearch.explain(query,sd.doc).toString().split(" ", 2);  
-		        String scores = scoreExplain[0];  
-		             //assertEquals("Thisis the text to be indexed.", hitDoc.get("fieldname"));  
-		        System.out.println(doc.get("fieldname") +"\n*score* "+ scores); 
-				
-				
-				System.out.println("Doc:");
-                System.out.println("Docname："+doc.get("filename"));
-                System.out.println("Path："+doc.get("path"));
-                System.out.println("content:"+doc.get("content"));
-                System.out.println("totalhits"+ Integer.toString(thit));
-			}
-			ir.close();
-		}catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        } catch (ParseException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-	}
-	
-	public static void main(String[] args)
-	{
-		SearchEngine se = new SearchEngine();
-		se.Luceneindexer();
-		se.Lucenesearcher();
-	}
 }

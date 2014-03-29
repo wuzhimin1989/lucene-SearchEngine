@@ -1,4 +1,4 @@
-package lucenetest;
+package preprocessinganalyser;
 
 import java.io.Reader;
 
@@ -28,7 +28,8 @@ public class NGramAnalyzer extends Analyzer {
 		Tokenizer source = new StandardTokenizer(Version.LUCENE_47, reader);
 
 	    TokenStream filter = new ShingleFilter(source, minGram, maxGram);
-	    filter = new LowerCaseFilter(Version.LUCENE_47, filter);
+
+	    filter = new LowerCaseFilter(Version.LUCENE_47, filter);  //optional
 	    filter = new StopFilter(Version.LUCENE_47, filter,StopAnalyzer.ENGLISH_STOP_WORDS_SET);
 
 	    return new TokenStreamComponents(source, filter);

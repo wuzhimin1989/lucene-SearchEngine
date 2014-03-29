@@ -1,25 +1,59 @@
-package lucenetest;
+package customSimilarity;
 
 import java.io.IOException;
 
+import org.apache.lucene.document.Document;
 import org.apache.lucene.index.AtomicReaderContext;
+import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.FieldInvertState;
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.CollectionStatistics;
 import org.apache.lucene.search.Explanation;
+import org.apache.lucene.search.FieldCache;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.PhraseQuery;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TermStatistics;
+import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.queries.CustomScoreProvider;
+import org.apache.lucene.queries.CustomScoreQuery;
+import org.apache.lucene.queries.function.FunctionQuery;
+import org.apache.lucene.search.Query;
 import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.search.similarities.TFIDFSimilarity;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.SmallFloat;
 
-public abstract class TFIDFScoring extends Similarity {
-	public TFIDFScoring(){;}
-	public abstract float coord(int overlap, int maxOverlap);
+public class MyTFIDFSimilarity extends TFIDFSimilarity{
 	
-	public abstract float queryNorm(float sumOfSquaredWeights);
+	private static final float[] NORM_TABLE = new float[256];
 	
-	public abstract float tf(float freq);
+	static {
+	for (int i = 0; i < 256; i++) {
+	     NORM_TABLE[i] = SmallFloat.byte315ToFloat((byte)i);
+		}
+	}
+	
+	public MyTFIDFSimilarity(){}
+	
+	public float coord(int overlap, int maxOverlap)
+	{
+		return 1.0f;
+	}	
+	
+	public float queryNorm(float sumOfSquaredWeights)
+	{
+		return 1.0f;
+	}
+	
+	
+	public float tf(float freq)
+	{
+		return freq;
+	}
 	
 	public Explanation idfExplain(CollectionStatistics collectionStats, TermStatistics termStats) 
 	{
@@ -46,36 +80,30 @@ public abstract class TFIDFScoring extends Similarity {
 		    return exp;
 	}
 	
-	public abstract float idf(long docFreq, long numDocs);
-
-	public abstract float lengthNorm(FieldInvertState state);
-	
-	public final long computeNorm(FieldInvertState state)
-	{
-		    float normValue = lengthNorm(state);
-		    return encodeNormValue(normValue);
+	public float idf(long docFreq, long numDocs) {
+		   return (float)(Math.log(numDocs+1/(double)(docFreq+1)));
 	}
 	
-	public abstract float decodeNormValue(long norm);
-	
-	public abstract long encodeNormValue(float f);
-
-	public abstract float sloppyFreq(int distance);
-
-	public abstract float scorePayload(int doc, int start, int end, BytesRef payload);
-	
-	public final SimWeight computeWeight(float queryBoost, CollectionStatistics collectionStats, TermStatistics... termStats) 
+	public float lengthNorm(FieldInvertState state)
 	{
-		final Explanation idf = termStats.length == 1
-			? idfExplain(collectionStats, termStats[0])
-		    : idfExplain(collectionStats, termStats);
-		return new IDFStats(collectionStats.field(), idf, queryBoost);
+		return 1.0f;
 	}
 	
-	public final SimScorer simScorer(SimWeight stats, AtomicReaderContext context) throws IOException 
+	public final long encodeNormValue(float f) {
+	   return SmallFloat.floatToByte315(f);
+	}
+	
+	public final float decodeNormValue(long norm) {
+	    return NORM_TABLE[(int) (norm & 0xFF)];  // & 0xFF maps negative bytes to positive above 127
+	}
+
+	public float sloppyFreq(int distance)
 	{
-		IDFStats idfstats = (IDFStats) stats;
-		return new TFIDFSimScorer(idfstats, context.reader().getNormValues(idfstats.field));
+		return 1.0f;
+	}
+	
+	public float scorePayload(int doc, int start, int end, BytesRef payload) {
+		return 1.0f;
 	}
 	
 	private final class TFIDFSimScorer extends SimScorer
@@ -109,11 +137,6 @@ public abstract class TFIDFScoring extends Similarity {
 			return scorePayload(doc, start, end, payload);
 		}
 		
-		@Override
-		public Explanation explain(int doc, Explanation freq) 
-		{
-			return explainScore(doc, freq, stats, norms);
-		}
 	}
 				   
 	/** Collection statistics for the TF-IDF model. The only statistic of interest
@@ -121,7 +144,7 @@ public abstract class TFIDFScoring extends Similarity {
 	private static class IDFStats extends SimWeight 
 	{
 	    private final String field;
-	    /** The idf and its explanation */
+	   
 	    private final Explanation idf;
 	    private float queryNorm;
 	    private float queryWeight;
@@ -153,53 +176,6 @@ public abstract class TFIDFScoring extends Similarity {
 		}
 	}  
 		 
-	private Explanation explainScore(int doc, Explanation freq, IDFStats stats, NumericDocValues norms)
-	{
-		Explanation result = new Explanation();
-		result.setDescription("score(doc="+doc+",freq="+freq+"), product of:");
-		// explain query weight
-		Explanation queryExpl = new Explanation();
-		queryExpl.setDescription("queryWeight, product of:");
-		Explanation boostExpl = new Explanation(stats.queryBoost, "boost");
-		if (stats.queryBoost != 1.0f)
-			queryExpl.addDetail(boostExpl);
-		
-	    queryExpl.addDetail(stats.idf);
-	    Explanation queryNormExpl = new Explanation(stats.queryNorm,"queryNorm");
-
-	    queryExpl.addDetail(queryNormExpl);
-		queryExpl.setValue(boostExpl.getValue() * stats.idf.getValue() * queryNormExpl.getValue());
-
-		result.addDetail(queryExpl);
-		    // explain field weight
-		Explanation fieldExpl = new Explanation();
-
-		fieldExpl.setDescription("fieldWeight in "+doc+ ", product of:");
-
-		Explanation tfExplanation = new Explanation();
-		tfExplanation.setValue(tf(freq.getValue()));
-
-		tfExplanation.setDescription("tf(freq="+freq.getValue()+"), with freq of:");
-		tfExplanation.addDetail(freq);
-		fieldExpl.addDetail(tfExplanation);
-
-		fieldExpl.addDetail(stats.idf);
-		Explanation fieldNormExpl = new Explanation();
-
-		float fieldNorm = norms != null ? decodeNormValue(norms.get(doc)) : 1.0f;
-		fieldNormExpl.setValue(fieldNorm);
-		fieldNormExpl.setDescription("fieldNorm(doc="+doc+")");
-
-		fieldExpl.addDetail(fieldNormExpl);
-		fieldExpl.setValue(tfExplanation.getValue() * stats.idf.getValue() *fieldNormExpl.getValue());
-		result.addDetail(fieldExpl);
-
-		// combine them
-		result.setValue(queryExpl.getValue() * fieldExpl.getValue());
-		if (queryExpl.getValue() == 1.0f)
-		      return fieldExpl;
-		return result;
-	}
 }
 
 
