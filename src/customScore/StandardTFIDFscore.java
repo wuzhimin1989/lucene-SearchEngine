@@ -59,11 +59,22 @@ import java.util.Properties;
 
 public class StandardTFIDFscore {
 		public int count;
-		public StandardTFIDFscore(){count = 10;}
-		public float[] newtopdoc(IndexReader ir, int[] oldtop, Query query) throws IOException
+		private int tfidfchoice;
+		public StandardTFIDFscore(){}
+		
+		public void setcount(int c)
 		{
-			int [] newtop = new int[count];
-			float [] newscore = new float[count];
+			this.count = c;
+		}
+		
+		public void settfidfchoice(int c)
+		{
+			this.tfidfchoice = c;
+		}
+		
+		public void newtopdoc(IndexReader ir, NewScoreStorage nss, Query query) throws IOException
+		{
+			//int [] newtop = new int[count];
 			
 			int numDocs = ir.numDocs();
 			float qdocfreq,qtfidf;
@@ -79,13 +90,27 @@ public class StandardTFIDFscore {
 			qry.extractTerms(sterm);
 			
 			Iterator<Term> qtenum = sterm.iterator(); 
+			
+			
+			//pingfanuse
+			float totalindexsize;
+			
+			totalindexsize = ir.getSumDocFreq("text");
+			System.out.println("total index size = " + Float.toString(totalindexsize));
+			
 			while(qtenum.hasNext())
 			{
 				Term tm = (Term)qtenum.next();
-			
-				qryterm.add(tm.toString());
+				
+				//System.out.println("term name:"+ tm.toString());
+				qryterm.add(tm.text());
 				qdocfreq = ir.docFreq(tm);
-				qtfidf=(float)(Math.log10((numDocs)/(double)(qdocfreq)));
+				
+				if(this.tfidfchoice == 0 || this.tfidfchoice == 1)
+					qtfidf = (float)(Math.log10((numDocs+1)/(double)(qdocfreq)+1));
+				else
+					qtfidf=(float)(Math.log10(1+(numDocs+1)/(double)(qdocfreq)+1));
+				
 				qvsm.add(qtfidf);
 				
 				tmpresult += (float)(Math.pow((double)qtfidf, 2));
@@ -102,7 +127,7 @@ public class StandardTFIDFscore {
 
 				ArrayList<Float> vsm = new ArrayList<Float>();
 				
-				int docid = oldtop[i];
+				int docid = nss.olddoc[i];
 				Terms terms = null;
 				try {
 						terms = ir.getTermVector(docid, "text");
@@ -124,22 +149,30 @@ public class StandardTFIDFscore {
 				}
 				
 				BytesRef thisterm = null;
+				float tf = (float) 0.0;
 				float idf = (float) 0.0;
 				float tfidf = (float) 0.0;
 				
 				while ((thisterm = tenum.next()) != null) {  
                     String termText = thisterm.utf8ToString();
                     termslist.add(termText);
+                    //System.out.println("name:"+ termText);
                     
-                    
-                    idf = (float)(Math.log10((numDocs)/(double)(tenum.docFreq())));
+                    if(this.tfidfchoice == 0 || this.tfidfchoice == 1)
+                    	idf = (float)(Math.log10((numDocs)/(double)(tenum.docFreq())));
+                    else
+                    	idf = (float)(Math.log10(1+ (numDocs)/(double)(tenum.docFreq())));
                     
                     DocsEnum docsEnum = tenum.docs(null, null); 
                     
                     while ((docsEnum.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {                    
-                        System.out.println("termText:"+termText+" TF:  "+docsEnum.freq());  
+                        //System.out.println("termText:"+termText+" TF:  "+docsEnum.freq());  
+                        if(this.tfidfchoice == 0 || this.tfidfchoice == 2)
+                        	tf = (float)(Math.log10(1+docsEnum.freq()));
+                        else
+                        	tf = (float)(1-(double)1.0/(1+docsEnum.freq()));
                         
-                        tfidf = (float)(docsEnum.freq() * (double)idf);
+                        tfidf = (float)((double)tf * (double)idf);
                    }                   
                    vsm.add(tfidf);  
                    tmpresult+=(float)(Math.pow((double)tfidf,2));
@@ -147,18 +180,19 @@ public class StandardTFIDFscore {
 			   
 			   dnorm = (float)(Math.sqrt((double)tmpresult));
 				
+			   tmpresult = 0;
 			   for(int j = 0;j < qvsm.size(); j++)
 			   {
 				   int index;
+				   //System.out.println(qryterm.get(j).toString());
 				   if((index = termslist.indexOf(qryterm.get(j))) != -1)
 				   {
 					   tmpresult += (float)qvsm.get(j).floatValue() * (float)vsm.get(index).floatValue(); 
 				   }
 			   }
 			   
-			   newscore[i] = (float)(tmpresult/(double)(dnorm * qnorm));
+			   nss.newscore[i] = (float)(tmpresult/(double)(dnorm * qnorm));
 			}
 			
-			return newscore;
 		}
 }

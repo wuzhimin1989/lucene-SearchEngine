@@ -35,23 +35,57 @@ import org.apache.lucene.util.Version;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import preprocessinganalyser.MyStandardAnalyzer;
 import preprocessinganalyser.NGramAnalyzer;
 import customSimilarity.MyTFIDFSimilarity;
 
 public class LIndexer {
 	//public TFIDFScoring tfidfs;	
 	//public MyTFIDFSimilarity MySimilarity; optional
+	private int Stemchoice;
+	private int LowCchoice;
+	private int IgnoreStopchoice;
+	private int Hygenchoice;
 	
-	public LIndexer(){}
+	public LIndexer()
+	{
+		Stemchoice = 0;
+		LowCchoice = 0;
+		IgnoreStopchoice = 0;
+		Hygenchoice = 0;
+	}
+	
+	public void setStemchoice(int c)
+	{
+		this.Stemchoice = c;
+	}
+	
+	public void setLowCchoice(int c)
+	{
+		this.LowCchoice = c;
+	}
+	
+	public void setIgnoreStopchoice(int c)
+	{
+		this.IgnoreStopchoice = c;
+	}
+	
+	public void setHygenchoice(int c)
+	{
+		this.Hygenchoice = c;
+	}
 	
 	public void Luceneindexer()
 	{
 		Directory directory = null;
 		Directory directory2 = null;
+		Directory directory3 = null;
 		IndexWriterConfig iwc = null;
 		IndexWriterConfig iwc2 = null;
+		IndexWriterConfig iwc3 = null;
 		IndexWriter iw = null;
 		IndexWriter iw2 = null;
+		IndexWriter iw3 = null;
 		FieldType ftype = new FieldType();
 		
 		ftype.setStoreTermVectors(true);
@@ -62,23 +96,40 @@ public class LIndexer {
 		ftype.setIndexed(true);
 		ftype.setStored(true);
 		
+		int choice = 0;
+		if(this.Stemchoice != 0)
+			choice = -1;
+		if(this.LowCchoice != 0)
+			choice = -2;
+		if(this.IgnoreStopchoice != 0)
+			choice = -3;
+		if(this.Hygenchoice != 0)	
+			choice = -4;
+		
 		try{
-			directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\SWindex"));
+			directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\Luceneindex"));
 			directory2 = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\BiWindex"));
+			directory3 = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\SingleWindex"));
 			
-			iwc = new IndexWriterConfig(Version.LUCENE_47, new StopAnalyzer(Version.LUCENE_47));
-			iwc2 = new IndexWriterConfig(Version.LUCENE_47, new NGramAnalyzer(2, 2));
+			NGramAnalyzer nga = new NGramAnalyzer(2,2);
+			nga.setchoice(choice);
 			
+			MyStandardAnalyzer msa = new MyStandardAnalyzer(Version.LUCENE_47);
+			msa.setchoice(choice);
+			
+			//MyStandardAnalyzer msd = new MyStandardAnalyzer();
+			
+			iwc = new IndexWriterConfig(Version.LUCENE_47, msa);
+			iwc2 = new IndexWriterConfig(Version.LUCENE_47, nga);
+			iwc3 = new IndexWriterConfig(Version.LUCENE_47, msa);
 			/*MySimilarity = new MyTFIDFSimilarity();
 			iwc.setSimilarity(MySimilarity);
 			iwc2.setSimilarity(MySimilarity);*/
 			
 			iw = new IndexWriter(directory, iwc);
 			iw2 = new IndexWriter(directory2, iwc2);
+			iw3 = new IndexWriter(directory3, iwc3);
 			
-			
-			
-		
 			Document doc = null;
 			File f = new File("I:\\zhimin\\courses\\ir\\resultdoc\\lucenetxt");
 			
@@ -129,8 +180,9 @@ public class LIndexer {
 					}catch(JSONException e){
 						e.printStackTrace();
 					}finally{
-						iw.addDocument(doc);
+						iw.addDocument(doc);		     
 						iw2.addDocument(doc);
+						iw3.addDocument(doc);				
 					}
 				}
 				bf.close();
@@ -149,6 +201,7 @@ public class LIndexer {
 	                iw2.close();
 	                iw.addIndexes(directory2);
 	                iw.close();
+	                iw3.close();
 	                
 	            } catch (CorruptIndexException e) {
 	                // TODO Auto-generated catch block

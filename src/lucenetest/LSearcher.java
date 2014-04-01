@@ -41,6 +41,9 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.Version;
 
+import preprocessinganalyser.MyStandardAnalyzer;
+import preprocessinganalyser.NGramAnalyzer;
+import customScore.NewScoreStorage;
 import customScore.StandardTFIDFscore;
 
 import java.util.regex.Matcher;  
@@ -52,14 +55,18 @@ public class LSearcher {
 	public int Stemchoice;
 	public int LowCchoice;
 	public int IgnoreStopchoice;
-	public int Scoremodel;
+	public int Hygenchoice;
+	//public int Scoremodel;
 	public int topcount;
+	public int ifindex;
+	public int tfidfchoice;
 	
-	public String InputQuery;
 	public String TermQstring;
-	public String[] PhraseQstring;
+	public String PhraseQstring;
 	public String InitialFields;
 	public int queryindex;
+	public float[] Lnewscore;
+
 	
 	public StandardTFIDFscore stfidf;
 	
@@ -68,72 +75,103 @@ public class LSearcher {
 	public LSearcher()
 	{
 		queryindex = 0;
-		Scoremodel = 0;
-		InitialFields = new String("content");
-		PhraseQstring = new String[5];
-		InputQuery = "";
+		tfidfchoice = 0;
+		//Scoremodel = 0;
+		InitialFields = new String("text");
+		PhraseQstring = new String();
+		//InputQuery = "";
 		TermQstring = "";
 		stfidf = new StandardTFIDFscore();
+		Lnewscore = new float[topcount];
+	
 	}
 	
-	public boolean detectphrase(String q)
+	public boolean detectphrase(String InputQuery)
 	{		
-		String a = "\"\\w*\"";
+		//String a = "\"\\w*\"";
+		//String a = "\"[\\W\\w]*?\"[\\w\\W]*?(?=[\\+;)])";
+		String a = "\"[^\"]*\"";
 		String tmp = ""; 
 		boolean ifexistphrase = false;
 		
 		Pattern p = Pattern.compile(a);
-		Matcher m = p.matcher(this.InputQuery);
+		Matcher m = p.matcher(InputQuery);
 		while(m.find()) {
 		    for(int i=0; i<=m.groupCount(); i++)
 		    	tmp += m.group(i);
-		    this.PhraseQstring[this.queryindex] = tmp;
+		    this.PhraseQstring = tmp;
 		    
-		    this.InputQuery.replaceAll(tmp, "");
+		    tmp = InputQuery.replaceAll(tmp, "");
 		    this.queryindex ++;
 		    ifexistphrase = true;
 		}
 		
-		this.InputQuery.replaceAll("\"", "");
-		this.TermQstring = this.InputQuery;
+		if(ifexistphrase == true)
+		{
+			InputQuery = tmp;
+			tmp = InputQuery.replaceAll("\"", "");
+			this.TermQstring = tmp;
+		}
+		else
+			this.TermQstring = InputQuery;
+		
 		
 		return ifexistphrase;
 	}
 	
 	public void Lucenesearcher()
 	{
+		
+		int choice = 0;
+		if(this.Stemchoice != 0)
+			choice = -1;
+		if(this.LowCchoice != 0)
+			choice = -2;
+		if(this.IgnoreStopchoice != 0)
+			choice = -3;
+		if(this.Hygenchoice != 0)	
+			choice = -4;
+		
 		try{
-			Directory directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\index"));
+			
+			Directory directory ;
+			if(!this.PhraseQstring.isEmpty() && this.TermQstring.isEmpty() )
+				directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\BiWindex"));
+			else if(!this.TermQstring.isEmpty() && this.PhraseQstring.isEmpty())
+				directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\SingleWindex"));
+			else
+				directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\Luceneindex"));
+			
 			IndexReader ir = DirectoryReader.open(directory);
 			IndexSearcher isearch = new IndexSearcher(ir);
 			
 			//MySimilarity = new MyTFIDFSimilarity();
 			//isearch.setSimilarity(MySimilarity);
 			Query tquery = null;
-			PhraseQuery pquery = null;
-			BooleanQuery bquery = null;
+			Query pquery = null;
+			BooleanQuery bquery = new BooleanQuery();
 			TopDocs top = null;
 			int i = 0;
 		
-			if(this.TermQstring != null)
+			if(!this.TermQstring.isEmpty())
 			{
-				QueryParser parser=new QueryParser(Version.LUCENE_47, this.InitialFields ,new StandardAnalyzer(Version.LUCENE_47));	
+				MyStandardAnalyzer msa = new MyStandardAnalyzer(Version.LUCENE_47);
+				msa.setchoice(choice);
+				
+				QueryParser parser=new QueryParser(Version.LUCENE_47, this.InitialFields, msa);	
 				tquery = parser.parse(this.TermQstring);
 			}
 			
-			if(this.PhraseQstring!= null)
+			if(!this.PhraseQstring.isEmpty())
 			{
-				pquery = new PhraseQuery();
-				for(String s : this.PhraseQstring)
-				{	
-					if(i < this.queryindex)
-						pquery.add(new Term(s,this.InitialFields));
-					i++;
-				}
-				pquery.setSlop(0);
+				NGramAnalyzer nga = new NGramAnalyzer(2,2);
+				nga.setchoice(choice);
+				
+				QueryParser pparser = new QueryParser(Version.LUCENE_47, this.InitialFields, nga);
+				pquery = pparser.parse(this.PhraseQstring);				
 			}
 			
-			if(this.TermQstring != null && this.PhraseQstring!=null)
+			if(!this.TermQstring.isEmpty() && !this.PhraseQstring.isEmpty())
 			{
 				bquery.add(tquery, BooleanClause.Occur.MUST);
 				bquery.add(pquery, BooleanClause.Occur.MUST);
@@ -141,13 +179,17 @@ public class LSearcher {
 				top = isearch.search(bquery, 1);
 			}
 			
-			if(this.TermQstring != null && this.PhraseQstring == null)
+			if(!this.TermQstring.isEmpty() && this.PhraseQstring.isEmpty())
 			{
-				top = isearch.search(tquery, 200);
+				top = isearch.search(tquery, topcount);
 			}
-			if(this.TermQstring == null && this.PhraseQstring != null)
+			if(this.TermQstring.isEmpty() && !this.PhraseQstring.isEmpty())
 			{
-				top = isearch.search(pquery, 1);
+				top = isearch.search(pquery, topcount);
+			}
+			if(!this.TermQstring.isEmpty() && !this.PhraseQstring.isEmpty())
+			{
+				top = isearch.search(bquery, topcount);
 			}
 			//QueryParser parser=new QueryParser(Version.LUCENE_47, "content",new StandardAnalyzer(Version.LUCENE_47));		
 			//Query query=parser.parse(InputQueries[0]);
@@ -160,52 +202,78 @@ public class LSearcher {
 			
 			int thit = top.totalHits;
 			int [] olddoc = new int[this.topcount];
-			int [] newdoc = new int[this.topcount];
+			
 			float [] newscore = new float[this.topcount];
 			int c=0;
+			NewScoreStorage nss = new NewScoreStorage();
+			nss.initial(this.topcount);
+			
 			for(ScoreDoc sd:sdoc)
 			{
 				Document doc = isearch.doc(sd.doc);
-				olddoc[c] = sd.doc;
+				nss.olddoc[c] = sd.doc;
 				c++;
-				//String[] scoreExplain = null;  
-		           // scoreExplain shows how it score  
-		        //scoreExplain = isearch.explain(query,sd.doc).toString().split(" ", 2);  
-		        //String scores = scoreExplain[0];  
-		             //assertEquals("Thisis the text to be indexed.", hitDoc.get("fieldname"));  
+				String[] scoreExplain = null;  
+		        //scoreExplain shows how it score  
+				if(!this.TermQstring.isEmpty() && this.PhraseQstring.isEmpty())
+				{
+					scoreExplain = isearch.explain(tquery,sd.doc).toString().split(" ", 2);  
+				}
+				if(this.TermQstring.isEmpty() && !this.PhraseQstring.isEmpty())
+				{
+					scoreExplain = isearch.explain(pquery,sd.doc).toString().split(" ", 2);  
+				}
+				if(this.TermQstring!="" && !this.PhraseQstring.isEmpty())
+				{
+					scoreExplain = isearch.explain(bquery,sd.doc).toString().split(" ", 2);  
+				}
+		        String scores = scoreExplain[0];  
+		        //assertEquals("Thisis the text to be indexed.", hitDoc.get("fieldname"));  
 		        //System.out.println(doc.get("fieldname") +"\n*score* "+ scores); 
 							
 				System.out.println("LuceneDoc:");
-                System.out.println("Docname："+doc.get("filename"));
-                System.out.println("Path："+doc.get("path"));
-                System.out.println("content:"+doc.get("content"));
+                System.out.println("ID："+Integer.toString(sd.doc));
+                System.out.println("stars："+doc.get("stars"));
+                System.out.println("score:"+scores);
                 System.out.println("totalhits"+ Integer.toString(thit));
 			}
 			
-			if(this.TermQstring != null && this.PhraseQstring!=null)
+			this.stfidf.setcount(topcount);
+			
+			if(this.PhraseQstring.isEmpty())
 			{
-				newscore = this.stfidf.newtopdoc(ir, olddoc, bquery);
-			}
-			if(this.TermQstring != null && this.PhraseQstring == null)
-			{
-				newscore = this.stfidf.newtopdoc(ir, olddoc, tquery);
-			}
-			if(this.TermQstring == null && this.PhraseQstring != null)
-			{
-				newscore = this.stfidf.newtopdoc(ir, olddoc, pquery);
+				this.stfidf.settfidfchoice(this.tfidfchoice);
+				this.stfidf.newtopdoc(ir, nss, tquery);
+			
+				this.sortdoc(nss);
+			
+				for(int j=0;j<topcount;j++)
+				{
+					Document ndoc = isearch.doc(nss.olddoc[j]);
+					System.out.println("LuceneDoc:");
+					System.out.println("ID："+ Integer.toString(nss.olddoc[j]));
+					System.out.println("scores：" + Float.toString(nss.newscore[j]));
+					System.out.println("totalhits"+ Integer.toString(thit));
+				}				
 			}
 			
-			newdoc = this.sortdoc(newscore, olddoc);
-			
-			for(int j=0;j<200;j++)
+			if(this.TermQstring.isEmpty())
 			{
-				Document ndoc = isearch.doc(newdoc[j]);
-				System.out.println("LuceneDoc:");
-                System.out.println("Docname："+ndoc.get("filename"));
-                System.out.println("Path："+ndoc.get("path"));
-                System.out.println("content:"+ndoc.get("content"));
-                System.out.println("totalhits"+ Integer.toString(thit));
+				this.stfidf.settfidfchoice(this.tfidfchoice);
+				this.stfidf.newtopdoc(ir, nss, pquery);
+				
+				this.sortdoc(nss);
+			
+				for(int j=0;j<topcount;j++)
+				{
+					Document ndoc = isearch.doc(nss.olddoc[j]);
+					System.out.println("LuceneDoc:");
+					System.out.println("ID："+ Integer.toString(nss.olddoc[j]));
+					System.out.println("scores：" + Float.toString(nss.newscore[j]));
+					System.out.println("totalhits"+ Integer.toString(thit));
+				}				
 			}
+			
 			ir.close();
 		}catch (IOException e) {
             // TODO Auto-generated catch block
@@ -216,7 +284,8 @@ public class LSearcher {
         }
 	}
 	
-	public int[] sortdoc(float []score, int[]docid)
+	
+	public void sortdoc(NewScoreStorage nss)
 	{	
 		Float f1,f2;
 		float tmpfloat;
@@ -226,23 +295,22 @@ public class LSearcher {
 		{
 			for(int m = 0; m < this.topcount- 1 - j; m++)
 			{
-				f1 = new Float(score[m]);
-				f2 = new Float(score[m+1]);
+				f1 = new Float(nss.newscore[m]);
+				f2 = new Float(nss.newscore[m+1]);
 				if(f1.compareTo(f2) < 0)
 				{
-					tmpfloat = score[m+1];
-					tmpint = docid[m+1];
-					score[m+1] = score[m];
-					score[m] = tmpfloat;
-					docid[m+1] = docid[m];
-					docid[m] = tmpint;
+					tmpfloat = nss.newscore[m+1];
+					tmpint = nss.olddoc[m+1];
+					nss.newscore[m+1] = nss.newscore[m];
+					nss.newscore[m] = tmpfloat;
+					nss.olddoc[m+1] = nss.olddoc[m];
+					nss.olddoc[m] = tmpint;
 				}
 			}
 		}
 		
-		return docid;
 	}
-	public void readconfig()
+	public void readconfig(LIndexer idx)
 	{
 		InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream("Configuration.properties");   
 		Properties p = new Properties();   
@@ -254,22 +322,46 @@ public class LSearcher {
 		this.Stemchoice = Integer.parseInt(p.getProperty("Stemchoice"));
 		this.LowCchoice = Integer.parseInt(p.getProperty("LowCchoice"));
 		this.IgnoreStopchoice = Integer.parseInt(p.getProperty("IgnoreStopchoice"));
-		this.Scoremodel = Integer.parseInt(p.getProperty("Scoremodel"));
+		this.Hygenchoice = Integer.parseInt(p.getProperty("Hygenchoice"));
+		//this.Scoremodel = Integer.parseInt(p.getProperty("Scoremodel"));
 		this.topcount = Integer.parseInt(p.getProperty("topcount"));
+		this.ifindex = Integer.parseInt(p.getProperty("ifindex"));
+		this.tfidfchoice = Integer.parseInt(p.getProperty("tfidf"));
+		
+		idx.setStemchoice(this.Stemchoice);
+		idx.setLowCchoice(this.LowCchoice);
+		idx.setIgnoreStopchoice(this.IgnoreStopchoice);
+		idx.setHygenchoice(this.Hygenchoice);
 	}
 	
 	public static void main(String[] args) throws IOException
 	{
 		LIndexer idx = new LIndexer();
-		idx.Luceneindexer();
-		
 		LSearcher ls = new LSearcher();
-		ls.readconfig();
+		ls.readconfig(idx);
 		
-		BufferedReader in = new BufferedReader(new InputStreamReader(System.in));  
-		String x = in.readLine();
-		 
-		ls.detectphrase(x);
-		ls.Lucenesearcher();
+		if(ls.ifindex == 1)
+		{	
+			idx.Luceneindexer();
+			System.out.println("Finish Index!You can begin search");
+			System.out.println("Please input your query:");
+		}
+		else
+			System.out.println("Please input your query:");
+		
+		while(true)
+		{
+			BufferedReader in = new BufferedReader(new InputStreamReader(System.in));  
+			String x = in.readLine();
+	//	String x = "husband";
+			if(x.equals(new String("exit")))
+			{
+				System.out.println("%%%%%%%%%Search EXIT!%%%%%%%%%%%%%%");
+				break;
+			}
+			ls.detectphrase(x);
+			ls.Lucenesearcher();
+			System.out.println("Please input your query or exit to end the program:");
+		}
 	}
 }
