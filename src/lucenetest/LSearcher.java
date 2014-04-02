@@ -55,7 +55,7 @@ public class LSearcher {
 	public int Stemchoice;
 	public int LowCchoice;
 	public int IgnoreStopchoice;
-	public int Hygenchoice;
+	public int numchoice;
 	//public int Scoremodel;
 	public int topcount;
 	public int ifindex;
@@ -66,6 +66,10 @@ public class LSearcher {
 	public String InitialFields;
 	public int queryindex;
 	public float[] Lnewscore;
+	
+	private String Sdir;
+	private String Bdir;
+	private String Mdir;
 
 	
 	public StandardTFIDFscore stfidf;
@@ -129,18 +133,18 @@ public class LSearcher {
 			choice = -2;
 		if(this.IgnoreStopchoice != 0)
 			choice = -3;
-		if(this.Hygenchoice != 0)	
+		if(this.numchoice != 0)	
 			choice = -4;
 		
 		try{
 			
 			Directory directory ;
 			if(!this.PhraseQstring.isEmpty() && this.TermQstring.isEmpty() )
-				directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\BiWindex"));
+				directory = FSDirectory.open(new File(this.Bdir));
 			else if(!this.TermQstring.isEmpty() && this.PhraseQstring.isEmpty())
-				directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\SingleWindex"));
+				directory = FSDirectory.open(new File(this.Sdir));
 			else
-				directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\Luceneindex"));
+				directory = FSDirectory.open(new File(this.Mdir));
 			
 			IndexReader ir = DirectoryReader.open(directory);
 			IndexSearcher isearch = new IndexSearcher(ir);
@@ -176,7 +180,7 @@ public class LSearcher {
 				bquery.add(tquery, BooleanClause.Occur.MUST);
 				bquery.add(pquery, BooleanClause.Occur.MUST);
 				
-				top = isearch.search(bquery, 1);
+				top = isearch.search(bquery, topcount);
 			}
 			
 			if(!this.TermQstring.isEmpty() && this.PhraseQstring.isEmpty())
@@ -231,10 +235,11 @@ public class LSearcher {
 		        //assertEquals("Thisis the text to be indexed.", hitDoc.get("fieldname"));  
 		        //System.out.println(doc.get("fieldname") +"\n*score* "+ scores); 
 							
-				System.out.println("LuceneDoc:");
+				System.out.println("LuceneDoc-Rank:" + Integer.toString(c));
                 System.out.println("ID："+Integer.toString(sd.doc));
                 System.out.println("stars："+doc.get("stars"));
                 System.out.println("score:"+scores);
+                System.out.println("Content"+ doc.get("text"));
                 System.out.println("totalhits"+ Integer.toString(thit));
 			}
 			
@@ -242,34 +247,42 @@ public class LSearcher {
 			
 			if(this.PhraseQstring.isEmpty())
 			{
+				System.out.println("$$$$$$$$$$$$$LET'S GET NEW SCORE DOCS$$$$$$$$$$$$$$$$$$");
 				this.stfidf.settfidfchoice(this.tfidfchoice);
 				this.stfidf.newtopdoc(ir, nss, tquery);
 			
 				this.sortdoc(nss);
-			
+				Document doc;
 				for(int j=0;j<topcount;j++)
 				{
 					Document ndoc = isearch.doc(nss.olddoc[j]);
-					System.out.println("LuceneDoc:");
+					doc = isearch.doc(nss.olddoc[j]);
+					System.out.println("NEWLuceneDoc-Rank:"+Integer.toString(j));
 					System.out.println("ID："+ Integer.toString(nss.olddoc[j]));
 					System.out.println("scores：" + Float.toString(nss.newscore[j]));
+					System.out.println("Content"+ doc.get("text"));
 					System.out.println("totalhits"+ Integer.toString(thit));
 				}				
 			}
 			
 			if(this.TermQstring.isEmpty())
 			{
+				System.out.println("$$$$$$$$$$$$$LET'S GET NEW SCORE DOCS$$$$$$$$$$$$$$$$$$");
 				this.stfidf.settfidfchoice(this.tfidfchoice);
 				this.stfidf.newtopdoc(ir, nss, pquery);
 				
 				this.sortdoc(nss);
-			
+				
+				Document doc;
+				
 				for(int j=0;j<topcount;j++)
 				{
+					doc = isearch.doc(nss.olddoc[j]);
 					Document ndoc = isearch.doc(nss.olddoc[j]);
-					System.out.println("LuceneDoc:");
+					System.out.println("NEWLuceneDoc-Rank:"+Integer.toString(j));
 					System.out.println("ID："+ Integer.toString(nss.olddoc[j]));
 					System.out.println("scores：" + Float.toString(nss.newscore[j]));
+					System.out.println("Content"+ doc.get("text"));
 					System.out.println("totalhits"+ Integer.toString(thit));
 				}				
 			}
@@ -321,23 +334,32 @@ public class LSearcher {
 		}   
 		this.Stemchoice = Integer.parseInt(p.getProperty("Stemchoice"));
 		this.LowCchoice = Integer.parseInt(p.getProperty("LowCchoice"));
-		this.IgnoreStopchoice = Integer.parseInt(p.getProperty("IgnoreStopchoice"));
-		this.Hygenchoice = Integer.parseInt(p.getProperty("Hygenchoice"));
+		this.IgnoreStopchoice = Integer.parseInt(p.getProperty("Ignorepunction"));
+		this.numchoice = Integer.parseInt(p.getProperty("numchoice"));
 		//this.Scoremodel = Integer.parseInt(p.getProperty("Scoremodel"));
 		this.topcount = Integer.parseInt(p.getProperty("topcount"));
 		this.ifindex = Integer.parseInt(p.getProperty("ifindex"));
 		this.tfidfchoice = Integer.parseInt(p.getProperty("tfidf"));
 		
+		this.Sdir = p.getProperty("SingleIndexDir");
+		this.Bdir = p.getProperty("BiWindexDir");
+		this.Mdir = p.getProperty("MixedIndexDir");
+		
+		idx.setDatasetDir(p.getProperty("datasetdir"));
+		idx.setBdir(this.Bdir);
+		idx.setSdir(this.Sdir);
+		idx.setMdir(this.Mdir);
 		idx.setStemchoice(this.Stemchoice);
 		idx.setLowCchoice(this.LowCchoice);
 		idx.setIgnoreStopchoice(this.IgnoreStopchoice);
-		idx.setHygenchoice(this.Hygenchoice);
+		idx.setHygenchoice(this.numchoice);
 	}
 	
 	public static void main(String[] args) throws IOException
 	{
 		LIndexer idx = new LIndexer();
 		LSearcher ls = new LSearcher();
+		
 		ls.readconfig(idx);
 		
 		if(ls.ifindex == 1)
@@ -353,6 +375,11 @@ public class LSearcher {
 		{
 			BufferedReader in = new BufferedReader(new InputStreamReader(System.in));  
 			String x = in.readLine();
+			if(x == null)
+			{
+				System.out.println("Please input your query or exit to end the program:");
+				continue;
+			}
 	//	String x = "husband";
 			if(x.equals(new String("exit")))
 			{

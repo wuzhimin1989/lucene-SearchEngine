@@ -37,22 +37,47 @@ import org.json.JSONObject;
 
 import preprocessinganalyser.MyStandardAnalyzer;
 import preprocessinganalyser.NGramAnalyzer;
-import customSimilarity.MyTFIDFSimilarity;
+//import customSimilarity.MyTFIDFSimilarity;
 
 public class LIndexer {
 	//public TFIDFScoring tfidfs;	
 	//public MyTFIDFSimilarity MySimilarity; optional
 	private int Stemchoice;
 	private int LowCchoice;
-	private int IgnoreStopchoice;
-	private int Hygenchoice;
+	private int Ignorepunction;
+	private int numchoice;
+	
+	private String Sdir;
+	private String Bdir;
+	private String Mdir;
+	private String DatasetDir;
 	
 	public LIndexer()
 	{
 		Stemchoice = 0;
 		LowCchoice = 0;
-		IgnoreStopchoice = 0;
-		Hygenchoice = 0;
+		Ignorepunction = 0;
+		numchoice = 0;
+	}
+	
+	public void setSdir(String d)
+	{
+		this.Sdir = d;
+	}
+	
+	public void setBdir(String d)
+	{
+		this.Bdir = d;
+	}
+	
+	public void setMdir(String d)
+	{
+		this.Mdir = d;
+	}
+	
+	public void setDatasetDir(String d)
+	{
+		this.DatasetDir = d;
 	}
 	
 	public void setStemchoice(int c)
@@ -67,12 +92,12 @@ public class LIndexer {
 	
 	public void setIgnoreStopchoice(int c)
 	{
-		this.IgnoreStopchoice = c;
+		this.Ignorepunction = c;
 	}
 	
 	public void setHygenchoice(int c)
 	{
-		this.Hygenchoice = c;
+		this.numchoice = c;
 	}
 	
 	public void Luceneindexer()
@@ -101,15 +126,15 @@ public class LIndexer {
 			choice = -1;
 		if(this.LowCchoice != 0)
 			choice = -2;
-		if(this.IgnoreStopchoice != 0)
+		if(this.Ignorepunction != 0)
 			choice = -3;
-		if(this.Hygenchoice != 0)	
+		if(this.numchoice != 0)	
 			choice = -4;
 		
 		try{
-			directory = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\Luceneindex"));
-			directory2 = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\BiWindex"));
-			directory3 = FSDirectory.open(new File("I:\\zhimin\\courses\\ir\\resultdoc\\SingleWindex"));
+			directory = FSDirectory.open(new File(this.Mdir));
+			directory2 = FSDirectory.open(new File(this.Bdir));
+			directory3 = FSDirectory.open(new File(this.Sdir));
 			
 			NGramAnalyzer nga = new NGramAnalyzer(2,2);
 			nga.setchoice(choice);
@@ -131,7 +156,7 @@ public class LIndexer {
 			iw3 = new IndexWriter(directory3, iwc3);
 			
 			Document doc = null;
-			File f = new File("I:\\zhimin\\courses\\ir\\resultdoc\\lucenetxt");
+			File f = new File(this.DatasetDir);
 			
 			for(File file : f.listFiles())
 			{

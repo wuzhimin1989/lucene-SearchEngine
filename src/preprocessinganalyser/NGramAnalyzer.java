@@ -5,9 +5,11 @@ import java.io.Reader;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.core.LetterTokenizer;
 import org.apache.lucene.analysis.core.LowerCaseFilter;
 import org.apache.lucene.analysis.core.StopAnalyzer;
 import org.apache.lucene.analysis.core.StopFilter;
+import org.apache.lucene.analysis.core.WhitespaceTokenizer;
 import org.apache.lucene.analysis.en.PorterStemFilter;
 import org.apache.lucene.analysis.miscellaneous.HyphenatedWordsFilter;
 import org.apache.lucene.analysis.shingle.ShingleFilter;
@@ -35,8 +37,13 @@ public class NGramAnalyzer extends Analyzer {
 	@Override
 	protected TokenStreamComponents createComponents(String arg0, Reader reader) 
 	{
-		Tokenizer source = new StandardTokenizer(Version.LUCENE_47, reader);
-
+		Tokenizer source;
+		if(filterchoice == -4)
+			source = new StandardTokenizer(Version.LUCENE_47, reader);
+		else
+			source = new LetterTokenizer(Version.LUCENE_47, reader);
+		
+		
 	    TokenStream filter = new ShingleFilter(source, minGram, maxGram);
 
 	    if(filterchoice != -2)
@@ -46,17 +53,12 @@ public class NGramAnalyzer extends Analyzer {
 	    
 	    if(filterchoice != -3)
 	    {
-	    	filter = new StopFilter(Version.LUCENE_47, filter,StopAnalyzer.ENGLISH_STOP_WORDS_SET);
+	    	filter = new StopFilter(Version.LUCENE_47, filter,MyStandardAnalyzer.ENGLISH_STOP_WORDS_SET);
 	    }
 	    
 	    if(filterchoice != -1)
 	    {
 	    	filter = new PorterStemFilter(filter);
-	    }
-	    
-	    if(filterchoice != -4)
-	    {
-	    	filter = new HyphenatedWordsFilter(filter);
 	    }
 	    
 	    return new TokenStreamComponents(source, filter);
