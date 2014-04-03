@@ -2,16 +2,21 @@ package lucenetest;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.Scanner;
 
-import org.apache.commons.cli.CommandLine;  
-import org.apache.commons.cli.CommandLineParser;  
-import org.apache.commons.cli.Options;  
-  
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.OptionBuilder;
+import org.apache.commons.cli.Options;
+
+
+
 import org.apache.lucene.analysis.core.SimpleAnalyzer;
 import org.apache.lucene.analysis.core.StopAnalyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
@@ -323,18 +328,28 @@ public class LSearcher {
 		}
 		
 	}
-	public void readconfig(LIndexer idx)
+	public void readconfig(LIndexer idx) throws FileNotFoundException
 	{
+		//String path = System.getProperty("user.dir") + File.separator + "config" + File.separator + "Configuration.properties";
 		InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream("Configuration.properties");   
-		Properties p = new Properties();   
+		//FileInputStream inputStream = new FileInputStream(System.getProperty("user.dir") + "\\config\\Configuration.properties");  
+		//System.out.println(System.getProperty("user.dir") + "/config/Configuration.properties");
+		
+		Properties p = new Properties(); 
+		
 		try {   
 			p.load(inputStream);   
 		  } catch (IOException e1) {   
 		   e1.printStackTrace();   
-		}   
+		}  
+		
+
 		this.Stemchoice = Integer.parseInt(p.getProperty("Stemchoice"));
+		
+		//System.out.println(p.getProperty("Stemchoice"));
+		
 		this.LowCchoice = Integer.parseInt(p.getProperty("LowCchoice"));
-		this.IgnoreStopchoice = Integer.parseInt(p.getProperty("Ignorepunction"));
+		this.IgnoreStopchoice = Integer.parseInt(p.getProperty("Hypehnchoice"));
 		this.numchoice = Integer.parseInt(p.getProperty("numchoice"));
 		//this.Scoremodel = Integer.parseInt(p.getProperty("Scoremodel"));
 		this.topcount = Integer.parseInt(p.getProperty("topcount"));
@@ -353,6 +368,7 @@ public class LSearcher {
 		idx.setLowCchoice(this.LowCchoice);
 		idx.setIgnoreStopchoice(this.IgnoreStopchoice);
 		idx.setHygenchoice(this.numchoice);
+		
 	}
 	
 	public static void main(String[] args) throws IOException

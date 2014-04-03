@@ -13,9 +13,6 @@ import java.util.Scanner;
 import java.util.ArrayList;
 import java.util.Set;
 
-import org.apache.commons.cli.CommandLine;  
-import org.apache.commons.cli.CommandLineParser;  
-import org.apache.commons.cli.Options;  
   
 
 import org.apache.lucene.analysis.core.SimpleAnalyzer;
